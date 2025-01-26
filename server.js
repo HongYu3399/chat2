@@ -30,14 +30,17 @@ const limiter = rateLimit({
 app.use(compression()); // 啟用 GZIP 壓縮
 app.use(limiter); // 應用請求限制
 
-// 優化 CORS 設定
+// 修改 CORS 設定
 app.use(cors({
   origin: [
+    'https://baize-chat.onrender.com',  // 修改為您的前端網址
     'https://chat2-4jju.onrender.com',
-    'http://localhost:10000'
+    'http://localhost:10000',
+    '*'  // 暫時允許所有來源以便測試
   ],
   methods: ['GET', 'POST'],
-  credentials: true
+  credentials: true,
+  optionsSuccessStatus: 200
 }));
 app.use(express.json());
 app.use(express.static('public')); // 提供靜態檔案服務

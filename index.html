@@ -23,7 +23,7 @@
     // 從後端獲取 Supabase 配置
     async function initSupabase() {
       try {
-        const response = await fetch('https://chat-u35b.onrender.com/config');
+        const response = await fetch('https://chat2-4jju.onrender.com/config');
         const config = await response.json();
         console.log('Supabase config:', config);
         supabaseClient = supabase.createClient(config.supabaseUrl, config.supabaseKey);
@@ -580,7 +580,7 @@
         chatbox.appendChild(loadingEl);
         chatbox.scrollTop = chatbox.scrollHeight;
 
-        const response = await fetch('https://chat-u35b.onrender.com/chat', {
+        const response = await fetch('https://chat2-4jju.onrender.com/chat', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ 

@@ -3,6 +3,8 @@ const express = require('express');
 const cors = require('cors');
 const OpenAI = require('openai');
 const { createClient } = require('@supabase/supabase-js');
+const rateLimit = require('express-rate-limit');
+const compression = require('compression');
 
 const app = express();
 const port = process.env.PORT || 10000;
@@ -18,11 +20,24 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
 });
 
+// 設定請求限制
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 分鐘
+  max: 100 // 限制每個 IP 15 分鐘內最多 100 個請求
+});
+
 // 中間件
+app.use(compression()); // 啟用 GZIP 壓縮
+app.use(limiter); // 應用請求限制
+
+// 優化 CORS 設定
 app.use(cors({
-  origin: '*',  // 允許所有來源
+  origin: [
+    'https://chat2-4jju.onrender.com',
+    'http://localhost:10000'
+  ],
   methods: ['GET', 'POST'],
-  credentials: false
+  credentials: true
 }));
 app.use(express.json());
 app.use(express.static('public')); // 提供靜態檔案服務
@@ -48,16 +63,22 @@ app.get('/favicon.ico', (req, res) => {
 app.post('/chat', async (req, res) => {
   try {
     const { message, userName, chatHistory } = req.body;
+    
+    // 增加輸入驗證
+    if (!message || !userName) {
+      return res.status(400).json({ 
+        error: '缺少必要參數' 
+      });
+    }
 
-    // 準備對話歷史，只取最近的 4 輪對話
-    const recentMessages = chatHistory
-      .slice(-20)  // 增加到最後 10 輪對話（20 條消息，包含用戶和 AI 的回覆）
+    // 優化對話歷史處理
+    const recentMessages = (chatHistory || [])
+      .slice(-20)
       .map(msg => ({
         role: msg.is_user ? "user" : "assistant",
         content: msg.content
       }));
 
-    // 呼叫 OpenAI API
     const completion = await openai.chat.completions.create({
       model: "gpt-3.5-turbo",
       messages: [
@@ -73,28 +94,35 @@ app.post('/chat', async (req, res) => {
             回答要有連貫性，避免重複之前說過的內容。
             如有需要，可以引用白澤的神話意象（如驅趕邪祟、洞察百怪等）。`
         },
-        ...recentMessages,  // 添加最近的對話歷史
+        ...recentMessages,
         {
           "role": "user",
           "content": `使用者 ${userName} 說: ${message}`
         }
       ],
       temperature: 0.9,
-      max_tokens: 800  // 增加回覆長度，讓 AI 能夠提供更詳細的回答
+      max_tokens: 800,
+      presence_penalty: 0.6, // 增加回答的多樣性
+      frequency_penalty: 0.5 // 減少重複
     });
 
-    // 取得回覆
-    const reply = completion.choices[0].message.content;
-
-    // 發送回應
-    res.json({ reply });
+    res.json({ reply: completion.choices[0].message.content });
 
   } catch (error) {
     console.error('OpenAI API error:', error);
-    res.status(500).json({ 
-      error: '無法取得回覆',
-      details: error.message 
-    });
+    
+    // 更詳細的錯誤處理
+    if (error.response) {
+      res.status(error.response.status).json({
+        error: '無法取得回覆',
+        details: error.response.data
+      });
+    } else {
+      res.status(500).json({
+        error: '伺服器錯誤',
+        details: error.message
+      });
+    }
   }
 });
 
